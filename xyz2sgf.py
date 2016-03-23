@@ -35,138 +35,14 @@ handicap_points_19 = {
 }
 
 
-class Board():                          # Internally the arrays are 1 too big, with 0 indexes being ignored (so we can use indexes 1 to 19)
-    def __init__(self, boardsize):
-        self.boardsize = boardsize
-        self.stones_checked = set()     # Used when searching for liberties
-        self.state = []
-        for x in range(self.boardsize + 1):
-            ls = list()
-            for y in range(self.boardsize + 1):
-                ls.append(0)
-            self.state.append(ls)
-
-    def group_has_liberties(self, x, y):
-        assert(x >= 1 and x <= self.boardsize and y >= 1 and y <= self.boardsize)
-        self.stones_checked = set()
-        return self.__group_has_liberties(x, y)
-
-    def __group_has_liberties(self, x, y):
-        assert(x >= 1 and x <= self.boardsize and y >= 1 and y <= self.boardsize)
-        colour = self.state[x][y]
-        assert(colour in [BLACK, WHITE])
-
-        self.stones_checked.add((x,y))
-
-        for i, j in adjacent_points(x, y, self.boardsize):
-            if self.state[i][j] == EMPTY:
-                return True
-            if self.state[i][j] == colour:
-                if (i,j) not in self.stones_checked:
-                    if self.__group_has_liberties(i, j):
-                        return True
-        return False
-
-    def play_move(self, colour, x, y):
-        assert(colour in [BLACK, WHITE])
-
-        opponent = BLACK if colour == WHITE else WHITE
-
-        if x < 1 or x > self.boardsize or y < 1 or y > self.boardsize:
-            raise OffBoard
-
-        self.state[x][y] = colour
-
-        for i, j in adjacent_points(x, y, self.boardsize):
-            if self.state[i][j] == opponent:
-                if not self.group_has_liberties(i, j):
-                    self.destroy_group(i, j)
-
-        # Check for and deal with suicide:
-
-        if not self.group_has_liberties(x, y):
-            self.destroy_group(x, y)
-
-    def destroy_group(self, x, y):
-        assert(x >= 1 and x <= self.boardsize and y >= 1 and y <= self.boardsize)
-        colour = self.state[x][y]
-        assert(colour in [BLACK, WHITE])
-
-        self.state[x][y] = EMPTY
-
-        for i, j in adjacent_points(x, y, self.boardsize):
-            if self.state[i][j] == colour:
-                self.destroy_group(i, j)
-
-
 class Node():
     def __init__(self, parent):
         self.properties = dict()
         self.children = []
-        self.board = None
-        self.moves_made = 0
-        self.is_main_line = False
         self.parent = parent
 
         if parent:
             parent.children.append(self)
-
-    def update(self):             # Use the properties to modify the board...
-
-        # A node "should" have only 1 of "B" or "W", and only 1 value in the list.
-        # The result will be wrong if the specs are violated. Whatever.
-
-        movers = {"B": BLACK, "W": WHITE}
-
-        for mover in movers:
-            if mover in self.properties:
-                movestring = self.properties[mover][0]
-                try:
-                    x = ord(movestring[0]) - 96
-                    y = ord(movestring[1]) - 96
-                    self.board.play_move(movers[mover], x, y)
-                except (IndexError, OffBoard):
-                    pass
-                self.moves_made += 1        # Consider off-board / passing moves as moves for counting purposes
-                                            # (incidentally, old SGF sometimes uses an off-board move to mean pass)
-
-        # A node can have all of "AB", "AW" and "AE"
-        # Note that adding a stone doesn't count as "playing" it and can
-        # result in illegal positions (the specs allow this explicitly)
-
-        adders = {"AB": BLACK, "AW": WHITE, "AE": EMPTY}
-
-        for adder in adders:
-            if adder in self.properties:
-                for value in self.properties[adder]:
-                    for point in points_from_points_string(value, self.board.boardsize):    # only returns points inside the board boundaries
-                        x, y = point[0], point[1]
-                        self.board.state[x][y] = adders[adder]
-
-    def update_recursive(self):                     # Only goes recursive if 2 or more children
-        node = self
-        while 1:
-            node.update()
-            if len(node.children) == 0:
-                return
-            elif len(node.children) == 1:           # i.e. just iterate where possible
-                node.copy_state_to_child(node.children[0])
-                node = node.children[0]
-                continue
-            else:
-                for child in node.children:
-                    node.copy_state_to_child(child)
-                    child.update_recursive()
-                return
-
-    def copy_state_to_child(self, child):
-        if len(self.children) > 0:                  # there's no guarantee the child has actually been appended, hence this test
-            if child is self.children[0]:
-                if self.is_main_line:
-                    child.is_main_line = True
-
-        child.board = copy.deepcopy(self.board)
-        child.moves_made = self.moves_made
 
     def safe_commit(self, key, value):      # Note: destroys the key if value is ""
         safe_s = safe_string(value)
@@ -189,44 +65,6 @@ class Node():
 
 
 # ---------------------------------------------------------------------
-
-def adjacent_points(x, y, boardsize):
-    result = set()
-
-    for i, j in [
-        (x - 1, y),
-        (x + 1, y),
-        (x, y - 1),
-        (x, y + 1),
-    ]:
-        if i >= 1 and i <= boardsize and j >= 1 and j <= boardsize:
-            result.add((i, j))
-
-    return result
-
-
-def points_from_points_string(s, boardsize):        # convert SGF "aa" or "cd:jf" into set of points
-    ret = set()
-
-    if len(s) < 2:
-        return ret
-
-    left = ord(s[0]) - 96
-    top = ord(s[1]) - 96
-    right = ord(s[-2]) - 96         # This works regardless of
-    bottom = ord(s[-1]) - 96        # the format ("aa" or "cd:jf")
-
-    if left > right:
-        left, right = right, left
-    if top > bottom:
-        top, bottom = bottom, top
-
-    for x in range(left, right + 1):
-        for y in range(top, bottom + 1):
-            if 1 <= x <= boardsize and 1 <= y <= boardsize:
-                ret.add((x,y))
-
-    return ret
 
 
 def string_from_point(x, y):                        # convert x, y into SGF coordinate e.g. "pd"
@@ -286,13 +124,6 @@ def load(filename):
 
     if size > 19 or size < 1:
         raise BadBoardSize
-
-    # The parsers just set up SGF keys and values in the nodes, but don't touch the board or other info like
-    # main line status and move count. We do that now:
-
-    root.board = Board(size)
-    root.is_main_line = True
-    root.update_recursive()
 
     return root
 
