@@ -88,26 +88,33 @@ def safe_string(s):     # "safe" meaning safely escaped \ and ] characters
 
 def load(filename):
 
-    with open(filename, encoding="utf8", errors="replace") as infile:
-        contents = infile.read()
-
     # FileNotFoundError is just allowed to bubble up
     # All the parsers below can raise ParserFail
 
     if filename[-4:].lower() == ".gib":
+
+        # These seem to come in many encodings; just try UTF-8 with replacement:
+
+        with open(filename, encoding="utf8", errors="replace") as infile:
+            contents = infile.read()
         root = parse_gib(contents)
 
     elif filename[-4:].lower() == ".ngf":
+
+        # These seem to usually be in GB18030 encoding:
+
+        with open(filename, encoding="gb18030", errors="replace") as infile:
+            contents = infile.read()
         root = parse_ngf(contents)
 
     elif filename[-4:].lower() in [".ugf", ".ugi"]:
 
-        # These seem to usually be in Shift-JIS encoding, hence:
+        # These seem to usually be in Shift-JIS encoding:
 
         with open(filename, encoding="shift_jisx0213", errors="replace") as infile:
             contents = infile.read()
-
         root = parse_ugf(contents)
+
     else:
         print("Couldn't detect file type -- make sure it has an extension of .gib, .ngf, .ugf or .ugi")
         raise UnknownFormat
@@ -299,14 +306,16 @@ def parse_ugf(ugf):     # Note that the files are often (always?) named .ugi
 
 def parse_ngf(ngf):
 
-    # Seems a poorly documented format
-
     ngf = ngf.strip()
     lines = ngf.split("\n")
 
     try:
         boardsize = int(lines[1])
         handicap = int(lines[5])
+        komi = float(lines[7])
+        pw = lines[2].split()[0]
+        pb = lines[3].split()[0]
+        rawdate = lines[8][0:8]
     except (IndexError, ValueError):
         raise ParserFail
 
@@ -318,6 +327,24 @@ def parse_ngf(ngf):
 
     root = Node(parent = None)
     node = root
+
+    if handicap == 0 and int(komi) == komi:
+        komi += 0.5
+    if komi:
+        root.set_value("KM", komi)
+
+    if len(rawdate) == 8:
+        ok = True
+        for n in range(8):
+            if rawdate[n] not in "0123456789":
+                ok = False
+        if ok:
+            date = rawdate[0:4] + "-" + rawdate[4:6] + "-" + rawdate[6:8]
+            root.set_value("DT", date)
+
+    root.set_value("SZ", boardsize)
+    root.safe_commit("PW", pw)
+    root.safe_commit("PB", pb)
 
     if handicap >= 2:
         root.set_value("HA", handicap)
