@@ -365,7 +365,16 @@ def parse_ngf(ngf):
         rawdate = ""
         komi = 0
 
-    if boardsize < 1 or boardsize > 19 or handicap < 0 or handicap > 9:
+    re = ""
+    try:
+        if "hite win" in lines[10]:
+            re = "W+"
+        elif "lack win" in lines[10]:
+            re = "B+"
+    except:
+        pass
+
+    if handicap < 0 or handicap > 9:
         raise ParserFail
 
     root = Node(parent = None)
@@ -397,6 +406,9 @@ def parse_ngf(ngf):
         root.safe_commit("PW", pw)
     if pb:
         root.safe_commit("PB", pb)
+
+    if re:
+        root.set_value("RE", re)
 
     # Main parser...
 
