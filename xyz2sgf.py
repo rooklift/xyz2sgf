@@ -12,7 +12,7 @@
 # https://github.com/fohristiwhirl/gofish
 
 
-import copy, os, sys
+import os, sys
 
 
 class BadBoardSize(Exception): pass
