@@ -5,7 +5,8 @@
 # want to redistribute (make a new issue).
 
 # Edit encodings here if desired...
-# Extensions should be length 4 lowercase e.g. ".gib"
+# Extensions here should be length 4 lowercase e.g. ".gib"
+# (We automatically convert uppercase filenames later.)
 
 loaders = {
     ".gib": {
