@@ -1,16 +1,32 @@
 #!/usr/bin/python3
 
-
-# "Universal" GIB, NGF, UGF --> SGF converter
+# https://github.com/fohristiwhirl/xyz2sgf
 # Copyright the author: Ask on GitHub if you
 # want to redistribute (make a new issue).
-#
-# Homepage:
-# https://github.com/fohristiwhirl/xyz2sgf
-#
-# This standalone converter is based on my larger Go library at:
-# https://github.com/fohristiwhirl/gofish
 
+# Edit encodings here if desired...
+# Extensions should be length 4 lowercase e.g. ".gib"
+
+loaders = {
+    ".gib": {
+        "function": "parse_gib",
+        "encoding": "utf8"
+    },
+    ".ngf": {
+        "function": "parse_ngf",
+        "encoding": "gb18030"
+    },
+    ".ugf": {
+        "function": "parse_ugf",
+        "encoding": "shift_jisx0213"
+    },
+    ".ugi": {
+        "function": "parse_ugf",
+        "encoding": "shift_jisx0213"
+    }
+}
+
+# ---------------------------------------------------------------------
 
 import os, re, sys
 
@@ -20,7 +36,6 @@ class ParserFail(Exception): pass
 class UnknownFormat(Exception): pass
 
 EMPTY, BLACK, WHITE = 0, 1, 2
-
 
 
 class Node():
@@ -131,29 +146,13 @@ def load(filename):
     # FileNotFoundError is just allowed to bubble up
     # All the parsers below can raise ParserFail
 
-    if filename[-4:].lower() == ".gib":
+    ext = filename[-4:].lower()
 
-        # These seem to come in many encodings; just try UTF-8 with replacement:
+    if ext in loaders:
 
-        with open(filename, encoding="utf8", errors="replace") as infile:
+        with open(filename, encoding = loaders[ext]["encoding"], errors = "replace") as infile:
             contents = infile.read()
-        root = parse_gib(contents)
-
-    elif filename[-4:].lower() == ".ngf":
-
-        # These seem to usually be in GB18030 encoding:
-
-        with open(filename, encoding="gb18030", errors="replace") as infile:
-            contents = infile.read()
-        root = parse_ngf(contents)
-
-    elif filename[-4:].lower() in [".ugf", ".ugi"]:
-
-        # These seem to usually be in Shift-JIS encoding:
-
-        with open(filename, encoding="shift_jisx0213", errors="replace") as infile:
-            contents = infile.read()
-        root = parse_ugf(contents)
+        root = globals()[loaders[ext]["function"]](contents)
 
     else:
         print("Couldn't detect file type -- make sure it has an extension of .gib, .ngf, .ugf or .ugi")
